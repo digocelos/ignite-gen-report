@@ -15,18 +15,43 @@ defmodule GenReport do
   alias GenReport.Parser
 
   @avaliable_member [
-    "Daniele",
-    "Mayk",
-    "Giuliano",
-    "Cleiton",
-    "Jakeliny",
-    "Joseph",
-    "Danilo",
-    "Diego",
-    "Cleiton",
-    "Rafael",
-    "Vinicius"
+    "daniele",
+    "mayk",
+    "giuliano",
+    "cleiton",
+    "jakeliny",
+    "joseph",
+    "danilo",
+    "diego",
+    "cleiton",
+    "rafael",
+    "vinicius"
   ]
+
+  @avaliable_months %{
+    1 => "janeiro",
+    2 => "fevereiro",
+    3 => "março",
+    4 => "abril",
+    5 => "maio",
+    6 => "junho",
+    7 => "julho",
+    8 => "agosto",
+    9 => "setembro",
+    10 => "outubro",
+    11 => "novembro",
+    12 => "dezembro"
+  }
+
+  @avaliable_years [
+    2016,
+    2017,
+    2018,
+    2019,
+    2020
+  ]
+
+  # Daniele,h 7,d 29, m 4, a 2018
 
   @doc """
   Generate report
@@ -34,23 +59,72 @@ defmodule GenReport do
   ## Parameters
     - fileName : String of a file where read
   """
+  def build() do
+    {:error, "Insira o nome de um arquivo"}
+  end
+
   def build(fileName) do
     fileName
     |> Parser.parse_file()
-    |> Enum.reduce(report_acc(), fn line, report -> report_all_hours(line, report) end)
+    |> Enum.reduce(report_acc(), fn line, report -> gen_report(line, report) end)
   end
 
-  defp report_all_hours([name, hours, _month, _day, _year], %{"all_hours" => all_hours}) do
-    all_hours = Map.put(all_hours, name, all_hours[name] + hours)
+  defp gen_report([name, hours, _day, month, year], %{
+         "all_hours" => all_hours,
+         "hours_per_month" => hours_per_month,
+         "hours_per_year" => hours_per_year
+       }) do
+    all_hours = gen_all_hours(all_hours, String.downcase(name), hours)
+    hours_per_month = gen_hours_per_month(hours_per_month, String.downcase(name), hours, month)
+    hours_per_year = gen_hours_per_year(hours_per_year, String.downcase(name), hours, year)
 
-    build_report(all_hours)
+    build_report(all_hours, hours_per_month, hours_per_year)
   end
 
-  def report_acc() do
+  defp gen_all_hours(all_hours, name, hours) do
+    Map.put(all_hours, name, all_hours[name] + hours)
+  end
+
+  defp gen_hours_per_month(hours_per_month, name, hours, month) do
+    calc_hours_month =
+      hours_per_month
+      |> Map.get(name)
+      |> Map.update(@avaliable_months[month], 0, fn curr -> curr + hours end)
+
+    %{hours_per_month | name => calc_hours_month}
+  end
+
+  defp gen_hours_per_year(hours_per_year, name, hours, year) do
+    calc_hours_year =
+      hours_per_year
+      |> Map.get(name)
+      |> Map.update(year, 0, fn curr -> curr + hours end)
+
+    %{hours_per_year | name => calc_hours_year}
+  end
+
+  defp report_acc() do
     all_hours = Enum.into(@avaliable_member, %{}, &{&1, 0})
-
-    build_report(all_hours)
+    hours_per_month = Enum.into(@avaliable_member, %{}, &{&1, report_acc_month()})
+    hours_per_year = Enum.into(@avaliable_member, %{}, &{&1, report_acc_years()})
+    build_report(all_hours, hours_per_month, hours_per_year)
   end
 
-  defp build_report(all_hours), do: %{"all_hours" => all_hours}
+  defp report_acc_month() do
+    @avaliable_months
+    |> Map.values()
+    |> Enum.into(%{}, &{&1, 0})
+  end
+
+  defp report_acc_years() do
+    @avaliable_years
+    |> Enum.into(%{}, &{&1, 0})
+  end
+
+  defp build_report(all_hours, hours_per_month, hours_per_year),
+    do: %{
+      "all_hours" => all_hours,
+      "hours_per_month" => hours_per_month,
+      "hours_per_year" => hours_per_year
+    }
 end

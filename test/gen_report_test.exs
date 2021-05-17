@@ -4,7 +4,7 @@ defmodule GenReportTest do
   alias GenReport
   alias GenReport.Support.ReportFixture
 
-  @file_name "gen_report.csv"
+  @file_name "report_test.csv"
 
   describe "build/1" do
     test "When passing file name return a report" do
