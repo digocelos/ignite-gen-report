@@ -59,14 +59,37 @@ defmodule GenReport do
   ## Parameters
     - fileName : String of a file where read
   """
-  def build() do
-    {:error, "Insira o nome de um arquivo"}
+  def build(fileName) do
+    result =
+      fileName
+      |> Parser.parse_file()
+      |> Enum.reduce(report_acc(), fn line, report -> gen_report(line, report) end)
+
+    {:ok, result}
   end
 
-  def build(fileName) do
-    fileName
-    |> Parser.parse_file()
-    |> Enum.reduce(report_acc(), fn line, report -> gen_report(line, report) end)
+  def build, do: {:error, "Insira o nome de um arquivo"}
+
+  def build_from_many do
+    {:error, "Please provider a list of strings"}
+  end
+
+  def build_from_many(file_names) when not is_list(file_names) do
+    {:error, "Please provider a list of strings"}
+  end
+
+  @doc """
+  Process many files async
+  """
+  def build_from_many(file_names) do
+    result =
+      file_names
+      |> Task.async_stream(&build/1)
+      |> Enum.reduce(report_acc(), fn {:ok, {:ok, result}}, report ->
+        sum_reports(report, result)
+      end)
+
+    {:ok, result}
   end
 
   defp gen_report([name, hours, _day, month, year], %{
@@ -74,10 +97,18 @@ defmodule GenReport do
          "hours_per_month" => hours_per_month,
          "hours_per_year" => hours_per_year
        }) do
-    all_hours = gen_all_hours(all_hours, String.downcase(name), hours)
-    hours_per_month = gen_hours_per_month(hours_per_month, String.downcase(name), hours, month)
-    hours_per_year = gen_hours_per_year(hours_per_year, String.downcase(name), hours, year)
+    new_name = String.downcase(name)
 
+    # Generate all_hours map
+    all_hours = gen_all_hours(all_hours, new_name, hours)
+
+    # Generate hours_per_month map
+    hours_per_month = gen_hours_per_month(hours_per_month, new_name, hours, month)
+
+    # Generate hours_per_year map
+    hours_per_year = gen_hours_per_year(hours_per_year, new_name, hours, year)
+
+    # Build final report
     build_report(all_hours, hours_per_month, hours_per_year)
   end
 
@@ -94,6 +125,37 @@ defmodule GenReport do
     %{hours_per_month | name => calc_hours_month}
   end
 
+  defp sum_reports(
+         %{
+           "all_hours" => all_hours1,
+           "hours_per_month" => hours_per_month1,
+           "hours_per_year" => hours_per_year1
+         },
+         %{
+           "all_hours" => all_hours2,
+           "hours_per_month" => hours_per_month2,
+           "hours_per_year" => hours_per_year2
+         }
+       ) do
+    all_hours = merge_maps(all_hours1, all_hours2)
+    hours_per_month = merge_maps(hours_per_month1, hours_per_month2)
+    hours_per_year = merge_maps(hours_per_year1, hours_per_year2)
+
+    build_report(all_hours, hours_per_month, hours_per_year)
+  end
+
+  defp merge_maps(map1, map2) do
+    Map.merge(map1, map2, fn _key, value1, value2 -> calc_merge_maps(value1, value2) end)
+  end
+
+  defp calc_merge_maps(val1, val2) when is_map(val1) and is_map(val2) do
+    merge_maps(val1, val2)
+  end
+
+  defp calc_merge_maps(val1, val2) do
+    val1 + val2
+  end
+
   defp gen_hours_per_year(hours_per_year, name, hours, year) do
     calc_hours_year =
       hours_per_year
@@ -103,20 +165,20 @@ defmodule GenReport do
     %{hours_per_year | name => calc_hours_year}
   end
 
-  defp report_acc() do
+  defp report_acc do
     all_hours = Enum.into(@avaliable_member, %{}, &{&1, 0})
     hours_per_month = Enum.into(@avaliable_member, %{}, &{&1, report_acc_month()})
     hours_per_year = Enum.into(@avaliable_member, %{}, &{&1, report_acc_years()})
     build_report(all_hours, hours_per_month, hours_per_year)
   end
 
-  defp report_acc_month() do
+  defp report_acc_month do
     @avaliable_months
     |> Map.values()
     |> Enum.into(%{}, &{&1, 0})
   end
 
-  defp report_acc_years() do
+  defp report_acc_years do
     @avaliable_years
     |> Enum.into(%{}, &{&1, 0})
   end
